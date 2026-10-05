@@ -15,6 +15,7 @@ import org.opensearch.commons.notifications.action.SendNotificationResponse
 import org.opensearch.commons.utils.recreateObject
 import org.opensearch.core.action.ActionListener
 import org.opensearch.core.xcontent.NamedXContentRegistry
+import org.opensearch.notifications.security.UserAccessManager
 import org.opensearch.notifications.send.SendMessageActionHelper
 import org.opensearch.tasks.Task
 import org.opensearch.transport.TransportService
@@ -57,6 +58,14 @@ internal class SendNotificationAction @Inject constructor(
         request: SendNotificationRequest,
         user: User?
     ): SendNotificationResponse {
+        // A request carrying the caller's own security context (the REST route) is checked against resource sharing
+        // per channel here: the request lists several channels, so the transport-level resource evaluator skips it.
+        // In-process callers run privileged and carry no caller context.
+        if (user != null) {
+            request.channelIds.toSet().forEach {
+                UserAccessManager.verifyResourceAccess(it, NotificationsActions.SEND_NOTIFICATION_NAME)
+            }
+        }
         return SendMessageActionHelper.executeRequest(request)
     }
 }
